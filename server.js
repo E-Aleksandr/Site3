@@ -192,6 +192,7 @@ app.get('/', (req, res) => {
     res.redirect('/view');
 });
 
+app.use(express.static(__dirname));
 // Запуск
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
