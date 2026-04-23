@@ -181,11 +181,11 @@ app.post('/api/add-player', (req, res) => {
 
 // Раздача HTML
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
 
 app.get('/view', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'view.html'));
+    res.sendFile(path.join(__dirname, 'static', 'view.html'));
 });
 
 app.get('/', (req, res) => {
