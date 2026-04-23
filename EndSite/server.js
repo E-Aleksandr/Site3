@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,15 +10,21 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public')); // для раздачи HTML файлов
+app.use(express.static('public'));
 
-// ===== НАСТРОЙКА БД =====
-const dbPath = path.join(__dirname, 'tanks.db');
+// ===== НАСТРОЙКА БД (с поддержкой Docker volume) =====
+const dbDir = path.join(__dirname, 'data');
+const dbPath = path.join(dbDir, 'tanks.db');
+
+// Создаем директорию для БД если её нет
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new sqlite3.Database(dbPath);
 
 // Создание таблиц
 db.serialize(() => {
-    // Таблица игроков
     db.run(`
         CREATE TABLE IF NOT EXISTS players (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,7 +33,6 @@ db.serialize(() => {
         )
     `);
     
-    // Таблица прогресса танков
     db.run(`
         CREATE TABLE IF NOT EXISTS tank_progress (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,12 +46,12 @@ db.serialize(() => {
         )
     `);
     
-    console.log('✅ База данных инициализирована');
+    console.log('✅ База данных инициализирована:', dbPath);
 });
 
 // ===== API ЭНДПОИНТЫ =====
 
-// 1. Получить всех игроков (публичный)
+// Получить всех игроков
 app.get('/api/players', (req, res) => {
     db.all('SELECT name FROM players ORDER BY name', (err, rows) => {
         if (err) {
@@ -58,7 +64,7 @@ app.get('/api/players', (req, res) => {
     });
 });
 
-// 2. Получить прогресс игрока (публичный)
+// Получить прогресс игрока
 app.post('/api/progress', (req, res) => {
     const { playerName } = req.body;
     
@@ -66,18 +72,15 @@ app.post('/api/progress', (req, res) => {
         return res.status(400).json({ success: false, error: 'Не указан игрок' });
     }
     
-    // Сначала получаем ID игрока
     db.get('SELECT id FROM players WHERE name = ?', [playerName], (err, player) => {
         if (err) {
             return res.status(500).json({ success: false, error: err.message });
         }
         
         if (!player) {
-            // Игрок не найден - возвращаем пустой прогресс
             return res.json({ success: true, progress: {}, totalDestroyed: 0 });
         }
         
-        // Получаем прогресс
         db.all(
             'SELECT nation, tank_index, destroyed FROM tank_progress WHERE player_id = ?',
             [player.id],
@@ -86,7 +89,6 @@ app.post('/api/progress', (req, res) => {
                     return res.status(500).json({ success: false, error: err.message });
                 }
                 
-                // Формируем объект прогресса
                 const progress = {};
                 let totalDestroyed = 0;
                 
@@ -108,12 +110,10 @@ app.post('/api/progress', (req, res) => {
     });
 });
 
-// 3. Сохранить прогресс (ТОЛЬКО ДЛЯ АДМИНА)
+// Сохранить прогресс (только для админа)
 app.post('/api/save', (req, res) => {
     const { playerName, nation, tankIndex, destroyed, adminToken } = req.body;
-    
-    // Проверка админ-токена (защита от посторонних)
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'temkirTanks2026AdminToken';
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'mytanks2024secret';
     
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ 
@@ -126,7 +126,6 @@ app.post('/api/save', (req, res) => {
         return res.status(400).json({ success: false, error: 'Не все параметры указаны' });
     }
     
-    // Получаем или создаем игрока
     db.get('SELECT id FROM players WHERE name = ?', [playerName], (err, player) => {
         if (err) {
             return res.status(500).json({ success: false, error: err.message });
@@ -149,7 +148,6 @@ app.post('/api/save', (req, res) => {
         if (player) {
             saveProgress(player.id);
         } else {
-            // Создаем нового игрока
             db.run('INSERT INTO players (name) VALUES (?)', [playerName], function(err) {
                 if (err) {
                     return res.status(500).json({ success: false, error: err.message });
@@ -160,10 +158,10 @@ app.post('/api/save', (req, res) => {
     });
 });
 
-// 4. Добавить нового игрока (ТОЛЬКО ДЛЯ АДМИНА)
+// Добавить игрока (только для админа)
 app.post('/api/add-player', (req, res) => {
     const { playerName, adminToken } = req.body;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'temkirTanks2026AdminToken';
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'mytanks2024secret';
     
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ success: false, error: 'Доступ запрещен' });
@@ -181,24 +179,7 @@ app.post('/api/add-player', (req, res) => {
     });
 });
 
-// 5. Удалить игрока (опционально, для админа)
-app.delete('/api/player', (req, res) => {
-    const { playerName, adminToken } = req.body;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'temkirTanks2026AdminToken';
-    
-    if (adminToken !== ADMIN_TOKEN) {
-        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
-    }
-    
-    db.run('DELETE FROM players WHERE name = ?', [playerName], function(err) {
-        if (err) {
-            return res.status(500).json({ success: false, error: err.message });
-        }
-        res.json({ success: true, deleted: this.changes });
-    });
-});
-
-// ===== РАЗДАЧА HTML СТРАНИЦ =====
+// Раздача HTML
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
@@ -208,10 +189,10 @@ app.get('/view', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.redirect('/view'); // по умолчанию показываем публичную версию
+    res.redirect('/view');
 });
 
-// Запуск сервера
+// Запуск
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
     console.log(`📊 Админ панель: http://localhost:${PORT}/admin`);
