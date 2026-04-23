@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Танковый конкурс - Трекер уничтожений</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0a2a, #003366, #0a0a2a);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            overflow: visible;
+        }
+
+        /* Верхняя панель - прозрачная */
+        .player-panel {
+            overflow: visible;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(8px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel-title {
+            color: #ffff;
+            font-size: 18px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Кастомный селект */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 15px;
+        }
+
+        .select-trigger {
+            background: rgba(45, 62, 53, 0.8);
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .select-trigger:hover {
+            background: rgba(58, 79, 68, 0.9);
+            border-color: #ffed4a;
+        }
+
+        .dropdown {
+            position: relative;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(35, 50, 45, 0.95);
+            backdrop-filter: blur(8px);
+            border: 2px solid #ffd700;
+            border-radius: 12px;
+            margin-top: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .dropdown.show {
+            display: block;
+        }
+
+        .player-option {
+            padding: 12px 20px;
+            cursor: pointer;
+            color: #ffff;
+            transition: all 0.2s;
+            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+        }
+
+        .player-option:hover {
+            background: rgba(255, 215, 0, 0.15);
+        }
+
+        .player-option.selected {
+            background: rgba(255, 215, 0, 0.25);
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        /* Секция добавления */
+        .add-player-section {
+            border-top: 2px solid #ffd700;
+            padding: 15px;
+            background: rgba(30, 45, 40, 0.9);
+            border-radius: 0 0 10px 10px;
+        }
+
+        .add-player-title {
+            color: #ffff;
+            font-size: 13px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .add-player-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .add-player-form input {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(26, 47, 34, 0.8);
+            border: 1px solid #ffd700;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .add-player-form input::placeholder {
+            color: #88a096;
+        }
+
+        .add-player-form button {
+            padding: 10px 20px;
+            background: #ffd700;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #1a472a;
+            transition: all 0.2s;
+        }
+
+        .add-player-form button:hover {
+            background: #ffed4a;
+            transform: scale(1.02);
+        }
+
+        /* Мини-прогресс внутри панели */
+        .player-mini-stats {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+        }
+
+        .player-name-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #ddd;
+        }
+
+        .current-player-name {
+            color: #ffd700;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .destroyed-count {
+            font-size: 14px;
+        }
+
+        .mini-progress {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            height: 24px;
+            overflow: hidden;
+        }
+
+        .mini-progress-fill {
+            background: linear-gradient(90deg, #ffd700, #ffed4a);
+            height: 100%;
+            border-radius: 20px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #1a472a;
+        }
+
+        /* Сетка танков - прозрачная */
+        .nations-grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .nation-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(4px);
+            border-radius: 15px;
+            overflow: hidden;
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nation-card:hover {
+            transform: translateY(-3px);
+            border-color: #ffd700;
+            background: rgba(255,255,255,0.08);
+        }
+
+        .nation-header {
+            padding: 15px;
+            color: #ffff;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .nation-flag {
+            width: 40px;
+            height: 30px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        .tanks-list {
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .tank-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            gap: 12px;
+        }
+
+        .tank-item:hover {
+            background: rgba(255, 215, 0, 0.15);
+        }
+
+        .tank-item.destroyed {
+            background: rgba(0, 100, 0, 0.4);
+            opacity: 0.8;
+        }
+
+        .tank-icon {
+            width: 25px;
+            height: 25px;
+            border-radius: 6px;
+            object-fit: contain;
+        }
+
+        .tank-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .tank-info {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tank-name {
+            font-size: 14px;
+            color: #ffff;
+        }
+
+        .destroyed .tank-name {
+            text-decoration: line-through;
+            color: #88a096;
+        }
+
+        .tank-tier {
+            background: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Панель выбора игрока -->
+        <div class="player-panel">
+            <div class="panel-title">ВЫБОР ИГРОКА</div>
+            <div class="custom-select">
+                <div class="select-trigger" id="selectTrigger">
+                    <span id="selectedPlayerText">Выберите игрока</span>
+                    <span>▼</span>
+                </div>
+                <div class="dropdown" id="playerDropdown">
+                    <div id="playersList"></div>
+                    <div class="add-player-section">
+                        <div class="add-player-title">➕ ДОБАВИТЬ ИГРОКА</div>
+                        <div class="add-player-form">
+                            <input type="text" id="newPlayerName" placeholder="Имя игрока" maxlength="20">
+                            <button id="addPlayerBtn">Добавить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Мини-прогресс внутри панели -->
+            <div class="player-mini-stats" id="playerMiniStats" style="display: none;">
+                <div class="player-name-stats">
+                    <span class="current-player-name" id="miniPlayerName">—</span>
+                    <span class="destroyed-count" id="miniDestroyedCount">0/0</span>
+                </div>
+                <div class="mini-progress">
+                    <div class="mini-progress-fill" id="miniProgressFill">0%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Сетка танков -->
+        <div class="nations-grid" id="tanksGrid">
+            <!-- СССР -->
+            <div class="nation-card" data-nation="СССР">
+                <div class="nation-header">
+                    <img class="nation-flag" src="162.png" alt="Флаг СССР" onerror="this.style.display='none'">
+                    <span>СССР</span>
+                </div>
+                <div class="tanks-list">
+                    <div class="tank-item" data-tank="Т-34" data-nation="СССР" data-index="0">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="079.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Объект 780</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="ИС-7" data-nation="СССР" data-index="1">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="087.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">ИС-7</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="Объект 268" data-nation="СССР" data-index="2">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="082.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Объект 268</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="Т-100-ЛТ" data-nation="СССР" data-index="3">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="089.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Т-100-ЛТ</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Германия -->
+            <div class="nation-card" data-nation="Германия">
+                <div class="nation-header">
+                    <img class="nation-flag" src="161.png" alt="Флаг Германии" onerror="this.style.display='none'">
+                    <span>Германия</span>
+                </div>
+                <div class="tanks-list">
+                    <div class="tank-item" data-tank="Tiger I" data-nation="Германия" data-index="0">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Tiger I</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="Panther" data-nation="Германия" data-index="1">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Panther</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="Maus" data-nation="Германия" data-index="2">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Maus</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- США -->
+            <div class="nation-card" data-nation="США">
+                <div class="nation-header">
+                    <img class="nation-flag" src="157.png" alt="Флаг США" onerror="this.style.display='none'">
+                    <span>США</span>
+                </div>
+                <div class="tanks-list">
+                    <div class="tank-item" data-tank="Sherman" data-nation="США" data-index="0">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Sherman</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="Pershing" data-nation="США" data-index="1">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">Pershing</span>
+                        </div>
+                    </div>
+                    <div class="tank-item" data-tank="T110E5" data-nation="США" data-index="2">
+                        <input type="checkbox" class="tank-checkbox">
+                        <img class="tank-icon" src="https://img.icons8.com/color/48/tank.png" onerror="this.style.display='none'">
+                        <div class="tank-info">
+                            <span class="tank-name">T110E5</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let players = {};
+        let currentPlayer = null;
+        
+        // ===== ЗАГРУЗКА ДАННЫХ ИЗ БД =====
+        async function loadAllData() {
+            try {
+                // Загружаем список игроков
+                const playersRes = await fetch('/api/get-players');
+                const playersData = await playersRes.json();
+                
+                if (playersData.success) {
+                    for (let playerName of playersData.players) {
+                        // Загружаем прогресс каждого игрока
+                        const progressRes = await fetch('/api/get-progress', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ playerName })
+                        });
+                        const progressData = await progressRes.json();
+                        
+                        players[playerName] = {
+                            totalDestroyed: progressData.totalDestroyed || 0,
+                            totalTanks: 100, // общее количество танков
+                            destroyed: progressData.progress || {}
+                        };
+                    }
+                    
+                    renderPlayersList();
+                    
+                    if (Object.keys(players).length > 0) {
+                        currentPlayer = Object.keys(players)[0];
+                        applyProgressToUI(currentPlayer);
+                        updateMiniStats();
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+            }
+        }
+        
+        // Применить прогресс к UI (проставить checkboxes)
+        function applyProgressToUI(playerName) {
+            const player = players[playerName];
+            if (!player) return;
+            
+            for (let nation in player.destroyed) {
+                const tanks = player.destroyed[nation];
+                tanks.forEach((isDestroyed, index) => {
+                    const checkbox = document.querySelector(
+                        `.tank-item[data-nation="${nation}"][data-index="${index}"] .tank-checkbox`
+                    );
+                    if (checkbox) {
+                        checkbox.checked = isDestroyed;
+                        const tankItem = checkbox.closest('.tank-item');
+                        if (isDestroyed) {
+                            tankItem.classList.add('destroyed');
+                        } else {
+                            tankItem.classList.remove('destroyed');
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Блокируем все чекбоксы и кнопки
+        function disableEditing() {
+            document.querySelectorAll('.tank-checkbox').forEach(cb => {
+                cb.disabled = true;
+            });
+            document.querySelector('.add-player-section')?.remove();
+            
+            // Опционально: показываем бейдж "Только просмотр"
+            const badge = document.createElement('div');
+            badge.textContent = '🔒 Только просмотр';
+            badge.style.cssText = `
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.7);
+                color: #ffd700;
+                padding: 5px 12px;
+                border-radius: 20px;
+                font-size: 12px;
+                z-index: 9999;
+            `;
+            document.body.appendChild(badge);
+        }
+        
+        // Рендер списка игроков (без возможности выбора?)
+        function renderPlayersList() {
+            const container = document.getElementById('playersList');
+            container.innerHTML = '';
+            
+            Object.keys(players).forEach(name => {
+                const player = players[name];
+                const percent = Math.round((player.totalDestroyed / player.totalTanks) * 100);
+                const option = document.createElement('div');
+                option.className = `player-option ${currentPlayer === name ? 'selected' : ''}`;
+                option.innerHTML = `
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>🎖 ${name}</span>
+                        <span>${player.totalDestroyed}/${player.totalTanks} (${percent}%)</span>
+                    </div>
+                `;
+                option.onclick = () => {
+                    currentPlayer = name;
+                    applyProgressToUI(currentPlayer);
+                    renderPlayersList();
+                    updateMiniStats();
+                    document.getElementById('selectedPlayerText').textContent = name;
+                    document.getElementById('playerDropdown').classList.remove('show');
+                };
+                container.appendChild(option);
+            });
+        }
+        
+        function updateMiniStats() {
+            if (!currentPlayer || !players[currentPlayer]) return;
+            
+            const player = players[currentPlayer];
+            const percent = (player.totalDestroyed / player.totalTanks) * 100;
+            document.getElementById('miniPlayerName').textContent = currentPlayer;
+            document.getElementById('miniDestroyedCount').textContent = `${player.totalDestroyed}/${player.totalTanks}`;
+            document.getElementById('miniProgressFill').textContent = `${Math.round(percent)}%`;
+            document.getElementById('miniProgressFill').style.width = `${percent}%`;
+            document.getElementById('playerMiniStats').style.display = 'block';
+        }
+        
+        // Инициализация
+        async function init() {
+            disableEditing();
+            await loadAllData();
+            
+            // Обработчики для дропдауна
+            document.getElementById('selectTrigger').onclick = (e) => {
+                e.stopPropagation();
+                document.getElementById('playerDropdown').classList.toggle('show');
+            };
+            
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.custom-select')) {
+                    document.getElementById('playerDropdown').classList.remove('show');
+                }
+            });
+        }
+        
+        init();
+    </script>
+</body>
+</html>
