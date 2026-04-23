@@ -1063,37 +1063,91 @@
         </div>
     </div>
 
-    <script>
+<script>
         let players = {};
         let currentPlayer = null;
-        const ADMIN_TOKEN = 'mytanks2024secret'; // или через переменную
+        const ADMIN_TOKEN = 'mytanks2024secret';
 
-        async function saveToDB(playerName, nation, tankIndex, destroyed) {
-            await fetch('/api/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playerName,
-                    nation,
-                    tankIndex,
-                    destroyed,
-                    adminToken: ADMIN_TOKEN  // <-- обязательно!
-                })
-            });
+        // ===== РАБОТА С БД =====
+        async function loadPlayersFromDB() {
+            try {
+                const response = await fetch('/api/players');
+                const data = await response.json();
+                
+                if (data.success) {
+                    players = {};
+                    for (let name of data.players) {
+                        await loadPlayerProgressFromDB(name);
+                    }
+                    renderPlayersList();
+                    
+                    if (data.players.length > 0 && !currentPlayer) {
+                        currentPlayer = data.players[0];
+                        applyProgressToUI(currentPlayer);
+                        updateMiniStats();
+                        document.getElementById('selectedPlayerText').textContent = currentPlayer;
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки игроков:', error);
+            }
+        }
+
+        async function loadPlayerProgressFromDB(playerName) {
+            try {
+                const response = await fetch('/api/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerName })
+                });
+                const data = await response.json();
+                
+                players[playerName] = {
+                    destroyed: data.progress || {},
+                    totalDestroyed: data.totalDestroyed || 0,
+                    totalTanks: getAllTanksFromDOM().length
+                };
+            } catch (error) {
+                console.error('Ошибка загрузки прогресса:', error);
+            }
+        }
+
+        async function saveTankToDB(playerName, nation, tankIndex, destroyed) {
+            try {
+                await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerName,
+                        nation,
+                        tankIndex,
+                        destroyed,
+                        adminToken: ADMIN_TOKEN
+                    })
+                });
+            } catch (error) {
+                console.error('Ошибка сохранения:', error);
+            }
         }
 
         async function addPlayerToDB(name) {
-            const response = await fetch('/api/add-player', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playerName: name,
-                    adminToken: ADMIN_TOKEN
-                })
-            });
-            return response.json();
+            try {
+                const response = await fetch('/api/add-player', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerName: name,
+                        adminToken: ADMIN_TOKEN
+                    })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('Ошибка добавления игрока:', error);
+                return { success: false };
+            }
         }
 
+        // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
         function getAllTanksFromDOM() {
             const tanks = [];
             document.querySelectorAll('.nation-card').forEach(nationCard => {
@@ -1114,49 +1168,7 @@
             return getAllTanksFromDOM().length;
         }
 
-        function createPlayer(name) {
-            const allTanks = getAllTanksFromDOM();
-            const destroyed = {};
-            
-            allTanks.forEach(tank => {
-                if (!destroyed[tank.nation]) {
-                    destroyed[tank.nation] = [];
-                }
-            });
-            allTanks.forEach(tank => {
-                destroyed[tank.nation][tank.index] = false;
-            });
-            
-            return {
-                destroyed: destroyed,
-                totalDestroyed: 0,
-                totalTanks: allTanks.length
-            };
-        }
-
-        function saveCurrentProgressToPlayer(playerName) {
-            if (!players[playerName]) return;
-            
-            const allTanks = getAllTanksFromDOM();
-            const destroyed = {};
-            
-            allTanks.forEach(tank => {
-                if (!destroyed[tank.nation]) {
-                    destroyed[tank.nation] = [];
-                }
-                destroyed[tank.nation][tank.index] = tank.checkbox.checked;
-            });
-            
-            players[playerName].destroyed = destroyed;
-            
-            let count = 0;
-            for (let nation in destroyed) {
-                count += destroyed[nation].filter(v => v === true).length;
-            }
-            players[playerName].totalDestroyed = count;
-        }
-
-        function loadPlayerProgress(playerName) {
+        function applyProgressToUI(playerName) {
             const player = players[playerName];
             if (!player) return;
             
@@ -1191,47 +1203,6 @@
             fillElement.style.width = `${percent}%`;
         }
 
-        function addPlayer(name) {
-            name = name.trim();
-            if (!name) {
-                alert('Введите имя игрока');
-                return false;
-            }
-            if (players[name]) {
-                alert('Игрок с таким именем уже есть');
-                return false;
-            }
-            
-            players[name] = createPlayer(name);
-            
-            if (!currentPlayer) {
-                currentPlayer = name;
-                loadPlayerProgress(currentPlayer);
-            }
-            
-            renderPlayersList();
-            updateMiniStats();
-            return true;
-        }
-
-        function toggleTank(tankItem, checkbox, nation, index) {
-            if (!currentPlayer) {
-                alert('Сначала выберите игрока');
-                checkbox.checked = false;
-                return;
-            }
-            
-            if (checkbox.checked) {
-                tankItem.classList.add('destroyed');
-            } else {
-                tankItem.classList.remove('destroyed');
-            }
-            
-            saveCurrentProgressToPlayer(currentPlayer);
-            updateMiniStats();
-            renderPlayersList();
-        }
-
         function renderPlayersList() {
             const container = document.getElementById('playersList');
             container.innerHTML = '';
@@ -1257,20 +1228,86 @@
                         </span>
                     </div>
                 `;
-                option.onclick = () => {
-                    if (currentPlayer) {
-                        saveCurrentProgressToPlayer(currentPlayer);
-                    }
+                option.onclick = async () => {
                     currentPlayer = name;
-                    loadPlayerProgress(currentPlayer);
+                    applyProgressToUI(currentPlayer);
                     renderPlayersList();
                     updateMiniStats();
                     document.getElementById('playerDropdown').classList.remove('show');
                     document.getElementById('selectedPlayerText').textContent = name;
-                    document.getElementById('selectedPlayerText').style.color = '#ffff';
                 };
                 container.appendChild(option);
             });
+        }
+
+        // ===== ОСНОВНЫЕ ФУНКЦИИ =====
+        async function addPlayer(name) {
+            name = name.trim();
+            if (!name) {
+                alert('Введите имя игрока');
+                return false;
+            }
+            if (players[name]) {
+                alert('Игрок с таким именем уже есть');
+                return false;
+            }
+            
+            const result = await addPlayerToDB(name);
+            if (!result.success) {
+                alert('Ошибка при добавлении');
+                return false;
+            }
+            
+            await loadPlayerProgressFromDB(name);
+            
+            if (!currentPlayer) {
+                currentPlayer = name;
+                applyProgressToUI(currentPlayer);
+            }
+            
+            renderPlayersList();
+            updateMiniStats();
+            return true;
+        }
+
+        async function toggleTank(tankItem, checkbox, nation, index) {
+            if (!currentPlayer) {
+                alert('Сначала выберите игрока');
+                checkbox.checked = false;
+                return;
+            }
+            
+            // Анимация
+            tankItem.classList.add('destroy-animation');
+            setTimeout(() => tankItem.classList.remove('destroy-animation'), 400);
+            
+            // Обновляем визуал
+            if (checkbox.checked) {
+                tankItem.classList.add('destroyed');
+            } else {
+                tankItem.classList.remove('destroyed');
+            }
+            
+            // Обновляем локальные данные
+            if (!players[currentPlayer].destroyed[nation]) {
+                players[currentPlayer].destroyed[nation] = [];
+            }
+            players[currentPlayer].destroyed[nation][index] = checkbox.checked;
+            
+            // Пересчёт
+            let count = 0;
+            for (let n in players[currentPlayer].destroyed) {
+                for (let val of players[currentPlayer].destroyed[n]) {
+                    if (val === true) count++;
+                }
+            }
+            players[currentPlayer].totalDestroyed = count;
+            
+            // Сохраняем в БД
+            await saveTankToDB(currentPlayer, nation, index, checkbox.checked);
+            
+            updateMiniStats();
+            renderPlayersList();
         }
 
         function initTankHandlers() {
@@ -1283,23 +1320,24 @@
             });
         }
 
+        // ===== ИНИЦИАЛИЗАЦИЯ =====
         document.getElementById('selectTrigger').onclick = (e) => {
             e.stopPropagation();
             document.getElementById('playerDropdown').classList.toggle('show');
         };
         
-        document.getElementById('addPlayerBtn').onclick = () => {
+        document.getElementById('addPlayerBtn').onclick = async () => {
             const input = document.getElementById('newPlayerName');
-            if (addPlayer(input.value)) {
+            if (await addPlayer(input.value)) {
                 input.value = '';
                 document.getElementById('playerDropdown').classList.remove('show');
             }
         };
         
-        document.getElementById('newPlayerName').onkeypress = (e) => {
+        document.getElementById('newPlayerName').onkeypress = async (e) => {
             if (e.key === 'Enter') {
                 const input = e.target;
-                if (addPlayer(input.value)) {
+                if (await addPlayer(input.value)) {
                     input.value = '';
                     document.getElementById('playerDropdown').classList.remove('show');
                 }
@@ -1312,21 +1350,25 @@
             }
         });
         
-        function init() {
+        async function init() {
             initTankHandlers();
-            addPlayer('Покров Гей');
-            addPlayer('Снайпер');
-            addPlayer('Штурмовик');
+            await loadPlayersFromDB();
             
-            if (Object.keys(players).length > 0) {
+            if (Object.keys(players).length === 0) {
+                await addPlayer('Командир');
+                await addPlayer('Снайпер');
+                await addPlayer('Штурмовик');
+            }
+            
+            if (Object.keys(players).length > 0 && !currentPlayer) {
                 currentPlayer = Object.keys(players)[0];
-                loadPlayerProgress(currentPlayer);
+                applyProgressToUI(currentPlayer);
                 renderPlayersList();
                 updateMiniStats();
                 document.getElementById('selectedPlayerText').textContent = currentPlayer;
-                document.getElementById('selectedPlayerText').style.color = '#ffff';
             }
         }
+        
         init();
     </script>
 </body>
