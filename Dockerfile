@@ -1,23 +1,15 @@
-# Используем официальный образ Node.js
 FROM node:18-alpine
 
-# Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
+# Копируем package.json (package-lock.json не обязателен)
 COPY package*.json ./
 
-# Устанавливаем зависимости
-RUN npm ci --only=production
+# Меняем npm ci на npm install (ci требует lock-файл)
+RUN npm install --only=production
 
-# Копируем исходный код
 COPY . .
 
-# Создаем директорию для БД и даем права
-RUN mkdir -p /app/data && chmod 777 /app/data
-
-# Открываем порт
 EXPOSE 3000
 
-# Запускаем приложение
 CMD ["node", "server.js"]
