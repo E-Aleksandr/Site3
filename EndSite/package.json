@@ -2,6 +2,9 @@
   "name": "EndSite",
   "version": "1.0.0",
   "scripts": {
-    "start": "npx serve public -p $PORT"
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
   }
 }
