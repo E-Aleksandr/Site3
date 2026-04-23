@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('static'));
 
 // ===== НАСТРОЙКА БД (с поддержкой Docker volume) =====
 const dbDir = path.join(__dirname, 'data');
@@ -191,8 +191,6 @@ app.get('/view', (req, res) => {
 app.get('/', (req, res) => {
     res.redirect('/view');
 });
-
-app.use(express.static(__dirname));
 // Запуск
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
