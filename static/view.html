@@ -1063,21 +1063,21 @@
         </div>
     </div>
 
-    <script>
+<script>
         let players = {};
         let currentPlayer = null;
         
         // ===== ЗАГРУЗКА ДАННЫХ ИЗ БД =====
         async function loadAllData() {
             try {
-                // Загружаем список игроков
-                const playersRes = await fetch('/api/get-players');
+                // Загружаем список игроков (исправлено: /api/players)
+                const playersRes = await fetch('/api/players');
                 const playersData = await playersRes.json();
                 
                 if (playersData.success) {
                     for (let playerName of playersData.players) {
-                        // Загружаем прогресс каждого игрока
-                        const progressRes = await fetch('/api/get-progress', {
+                        // Загружаем прогресс каждого игрока (исправлено: /api/progress)
+                        const progressRes = await fetch('/api/progress', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ playerName })
@@ -1086,7 +1086,7 @@
                         
                         players[playerName] = {
                             totalDestroyed: progressData.totalDestroyed || 0,
-                            totalTanks: 100, // общее количество танков
+                            totalTanks: getAllTanksCount(), // динамическое количество
                             destroyed: progressData.progress || {}
                         };
                     }
@@ -1097,11 +1097,19 @@
                         currentPlayer = Object.keys(players)[0];
                         applyProgressToUI(currentPlayer);
                         updateMiniStats();
+                        document.getElementById('selectedPlayerText').textContent = currentPlayer;
                     }
                 }
             } catch (error) {
                 console.error('Ошибка загрузки:', error);
             }
+        }
+        
+        // Подсчёт общего количества танков
+        function getAllTanksCount() {
+            let count = 0;
+            document.querySelectorAll('.tank-item').forEach(() => count++);
+            return count;
         }
         
         // Применить прогресс к UI (проставить checkboxes)
@@ -1111,6 +1119,8 @@
             
             for (let nation in player.destroyed) {
                 const tanks = player.destroyed[nation];
+                if (!tanks) continue;
+                
                 tanks.forEach((isDestroyed, index) => {
                     const checkbox = document.querySelector(
                         `.tank-item[data-nation="${nation}"][data-index="${index}"] .tank-checkbox`
@@ -1133,9 +1143,11 @@
             document.querySelectorAll('.tank-checkbox').forEach(cb => {
                 cb.disabled = true;
             });
-            document.querySelector('.add-player-section')?.remove();
             
-            // Опционально: показываем бейдж "Только просмотр"
+            const addSection = document.querySelector('.add-player-section');
+            if (addSection) addSection.remove();
+            
+            // Бейдж "Только просмотр"
             const badge = document.createElement('div');
             badge.textContent = '🔒 Только просмотр';
             badge.style.cssText = `
@@ -1152,16 +1164,16 @@
             document.body.appendChild(badge);
         }
         
-        // Рендер списка игроков (без возможности выбора?)
+        // Рендер списка игроков
         function renderPlayersList() {
             const container = document.getElementById('playersList');
+            if (!container) return;
             container.innerHTML = '';
             
             Object.keys(players).forEach(name => {
                 const player = players[name];
                 const percent = Math.round((player.totalDestroyed / player.totalTanks) * 100);
                 const option = document.createElement('div');
-
                 option.className = `player-option ${currentPlayer === name ? 'selected' : ''}`;
                 option.innerHTML = `
                     <div style="display: flex; justify-content: space-between;">
@@ -1188,9 +1200,13 @@
             const percent = (player.totalDestroyed / player.totalTanks) * 100;
             document.getElementById('miniPlayerName').textContent = currentPlayer;
             document.getElementById('miniDestroyedCount').textContent = `${player.totalDestroyed}/${player.totalTanks}`;
-            document.getElementById('miniProgressFill').textContent = `${Math.round(percent)}%`;
-            document.getElementById('miniProgressFill').style.width = `${percent}%`;
-            document.getElementById('playerMiniStats').style.display = 'block';
+            const fillElement = document.getElementById('miniProgressFill');
+            if (fillElement) {
+                fillElement.textContent = `${Math.round(percent)}%`;
+                fillElement.style.width = `${percent}%`;
+            }
+            const statsBlock = document.getElementById('playerMiniStats');
+            if (statsBlock) statsBlock.style.display = 'block';
         }
         
         // Инициализация
@@ -1198,21 +1214,24 @@
             disableEditing();
             await loadAllData();
             
-            // Обработчики для дропдауна
-            document.getElementById('selectTrigger').onclick = (e) => {
-                e.stopPropagation();
-                document.getElementById('playerDropdown').classList.toggle('show');
-            };
+            const trigger = document.getElementById('selectTrigger');
+            if (trigger) {
+                trigger.onclick = (e) => {
+                    e.stopPropagation();
+                    const dropdown = document.getElementById('playerDropdown');
+                    if (dropdown) dropdown.classList.toggle('show');
+                };
+            }
             
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.custom-select')) {
-                    document.getElementById('playerDropdown').classList.remove('show');
+                    const dropdown = document.getElementById('playerDropdown');
+                    if (dropdown) dropdown.classList.remove('show');
                 }
             });
         }
         
         init();
     </script>
-
 </body>
 </html>
