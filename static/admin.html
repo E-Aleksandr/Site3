@@ -1354,12 +1354,6 @@
             initTankHandlers();
             await loadPlayersFromDB();
             
-            if (Object.keys(players).length === 0) {
-                await addPlayer('Командир');
-                await addPlayer('Снайпер');
-                await addPlayer('Штурмовик');
-            }
-            
             if (Object.keys(players).length > 0 && !currentPlayer) {
                 currentPlayer = Object.keys(players)[0];
                 applyProgressToUI(currentPlayer);
