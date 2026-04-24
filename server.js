@@ -7,23 +7,19 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static('static'));
 
-// ===== НАСТРОЙКА БД (с поддержкой Docker volume) =====
 const dbDir = path.join(__dirname, 'data');
 const dbPath = path.join(dbDir, 'tanks.db');
 
-// Создаем директорию для БД если её нет
 if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
 }
 
 const db = new sqlite3.Database(dbPath);
 
-// Создание таблиц
 db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS players (
@@ -45,13 +41,8 @@ db.serialize(() => {
             FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
         )
     `);
-    
-    console.log('✅ База данных инициализирована:', dbPath);
 });
 
-// ===== API ЭНДПОИНТЫ =====
-
-// Получить всех игроков
 app.get('/api/players', (req, res) => {
     db.all('SELECT name FROM players ORDER BY name', (err, rows) => {
         if (err) {
@@ -64,7 +55,6 @@ app.get('/api/players', (req, res) => {
     });
 });
 
-// Получить прогресс игрока
 app.post('/api/progress', (req, res) => {
     const { playerName } = req.body;
     
@@ -110,10 +100,9 @@ app.post('/api/progress', (req, res) => {
     });
 });
 
-// Сохранить прогресс (только для админа)
 app.post('/api/save', (req, res) => {
     const { playerName, nation, tankIndex, destroyed, adminToken } = req.body;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'mytanks2024secret';
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
     
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ 
@@ -158,10 +147,9 @@ app.post('/api/save', (req, res) => {
     });
 });
 
-// Добавить игрока (только для админа)
 app.post('/api/add-player', (req, res) => {
     const { playerName, adminToken } = req.body;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'mytanks2024secret';
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
     
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ success: false, error: 'Доступ запрещен' });
@@ -179,8 +167,7 @@ app.post('/api/add-player', (req, res) => {
     });
 });
 
-// Раздача HTML
-app.get('/admin', (req, res) => {
+app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
 
@@ -191,7 +178,6 @@ app.get('/view', (req, res) => {
 app.get('/', (req, res) => {
     res.redirect('/view');
 });
-// Запуск
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
     console.log(`📊 Админ панель: http://localhost:${PORT}/admin`);
