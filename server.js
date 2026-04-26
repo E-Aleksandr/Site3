@@ -213,18 +213,20 @@ app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
 });
 
 app.get('/g83dsh21tdsg9sa/reset', async (req, res) => {
-    const adminToken = req.query.adminToken;
+    const { adminToken } = req.body;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
 
     if (adminToken !== ADMIN_TOKEN) {
-        return res.status(403).send('Доступ запрещен');
+        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
     }
 
     try {
-        await db.execute("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP");
-        res.send('✅ Прогресс успешно сброшен');
+        await db.execute("DELETE FROM tank_progress");
+        await db.execute("DELETE FROM players");
+        await db.execute("DELETE FROM sqlite_sequence");
+        res.json({ success: true, message: "Все данные удалены" });
     } catch (err) {
-        res.status(500).send(`❌ Ошибка: ${err.message}`);
+        res.status(500).json({ error: err.message });
     }
 });
 
