@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+
+const { createClient } = require('@libsql/client');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,96 +10,107 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('static'));
 
-const dbDir = path.join(__dirname, 'data');
-const dbPath = path.join(dbDir, 'tanks.db');
+const tursoUrl = process.env.TURSO_DB_URL;
+const tursoToken = process.env.TURSO_DB_TOKEN;
 
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+if (!tursoUrl || !tursoToken) {
+    console.error('❌ Ошибка: TURSO_DB_URL или TURSO_DB_TOKEN не заданы в окружении');
 }
 
-const db = new sqlite3.Database(dbPath);
-
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-    
-    db.run(`
-        CREATE TABLE IF NOT EXISTS tank_progress (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            player_id INTEGER NOT NULL,
-            nation TEXT NOT NULL,
-            tank_index INTEGER NOT NULL,
-            destroyed BOOLEAN DEFAULT 0,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(player_id, nation, tank_index),
-            FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
-        )
-    `);
+const db = createClient({
+    url: tursoUrl,
+    authToken: tursoToken,
 });
 
-app.get('/api/players', (req, res) => {
-    db.all('SELECT name FROM players ORDER BY name', (err, rows) => {
-        if (err) {
-            return res.status(500).json({ success: false, error: err.message });
-        }
+async function initDatabase() {
+    try {
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS tank_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                nation TEXT NOT NULL,
+                tank_index INTEGER NOT NULL,
+                destroyed BOOLEAN DEFAULT 0,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(player_id, nation, tank_index),
+                FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+            )
+        `);
+        
+        console.log('✅ Таблицы созданы/проверены');
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err.message);
+    }
+}
+
+initDatabase();
+
+app.get('/api/players', async (req, res) => {
+    try {
+        const result = await db.execute('SELECT name FROM players ORDER BY name');
         res.json({ 
             success: true, 
-            players: rows.map(row => row.name) 
+            players: result.rows.map(row => row.name) 
         });
-    });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
-app.post('/api/progress', (req, res) => {
+app.post('/api/progress', async (req, res) => {
     const { playerName } = req.body;
     
     if (!playerName) {
         return res.status(400).json({ success: false, error: 'Не указан игрок' });
     }
     
-    db.get('SELECT id FROM players WHERE name = ?', [playerName], (err, player) => {
-        if (err) {
-            return res.status(500).json({ success: false, error: err.message });
-        }
+    try {
+        const playerResult = await db.execute({
+            sql: 'SELECT id FROM players WHERE name = ?',
+            args: [playerName]
+        });
+        
+        const player = playerResult.rows[0];
         
         if (!player) {
             return res.json({ success: true, progress: {}, totalDestroyed: 0 });
         }
         
-        db.all(
-            'SELECT nation, tank_index, destroyed FROM tank_progress WHERE player_id = ?',
-            [player.id],
-            (err, rows) => {
-                if (err) {
-                    return res.status(500).json({ success: false, error: err.message });
-                }
-                
-                const progress = {};
-                let totalDestroyed = 0;
-                
-                rows.forEach(row => {
-                    if (!progress[row.nation]) {
-                        progress[row.nation] = [];
-                    }
-                    progress[row.nation][row.tank_index] = row.destroyed === 1;
-                    if (row.destroyed === 1) totalDestroyed++;
-                });
-                
-                res.json({ 
-                    success: true, 
-                    progress: progress,
-                    totalDestroyed: totalDestroyed
-                });
+        const progressResult = await db.execute({
+            sql: 'SELECT nation, tank_index, destroyed FROM tank_progress WHERE player_id = ?',
+            args: [player.id]
+        });
+        
+        const progress = {};
+        let totalDestroyed = 0;
+        
+        progressResult.rows.forEach(row => {
+            if (!progress[row.nation]) {
+                progress[row.nation] = [];
             }
-        );
-    });
+            progress[row.nation][row.tank_index] = row.destroyed === 1;
+            if (row.destroyed === 1) totalDestroyed++;
+        });
+        
+        res.json({ 
+            success: true, 
+            progress: progress,
+            totalDestroyed: totalDestroyed
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
-app.post('/api/save', (req, res) => {
+app.post('/api/save', async (req, res) => {
     const { playerName, nation, tankIndex, destroyed, adminToken } = req.body;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
     
@@ -115,39 +125,39 @@ app.post('/api/save', (req, res) => {
         return res.status(400).json({ success: false, error: 'Не все параметры указаны' });
     }
     
-    db.get('SELECT id FROM players WHERE name = ?', [playerName], (err, player) => {
-        if (err) {
-            return res.status(500).json({ success: false, error: err.message });
+    try {
+        const playerResult = await db.execute({
+            sql: 'SELECT id FROM players WHERE name = ?',
+            args: [playerName]
+        });
+        
+        let playerId = playerResult.rows[0]?.id;
+        
+        if (!playerId) {
+            const insertResult = await db.execute({
+                sql: 'INSERT INTO players (name) VALUES (?)',
+                args: [playerName]
+            });
+            playerId = insertResult.lastInsertRowid;
         }
         
-        const saveProgress = (playerId) => {
-            db.run(`
+        await db.execute({
+            sql: `
                 INSERT INTO tank_progress (player_id, nation, tank_index, destroyed, updated_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(player_id, nation, tank_index) 
                 DO UPDATE SET destroyed = ?, updated_at = CURRENT_TIMESTAMP
-            `, [playerId, nation, tankIndex, destroyed ? 1 : 0, destroyed ? 1 : 0], (err) => {
-                if (err) {
-                    return res.status(500).json({ success: false, error: err.message });
-                }
-                res.json({ success: true });
-            });
-        };
+            `,
+            args: [playerId, nation, tankIndex, destroyed ? 1 : 0, destroyed ? 1 : 0]
+        });
         
-        if (player) {
-            saveProgress(player.id);
-        } else {
-            db.run('INSERT INTO players (name) VALUES (?)', [playerName], function(err) {
-                if (err) {
-                    return res.status(500).json({ success: false, error: err.message });
-                }
-                saveProgress(this.lastID);
-            });
-        }
-    });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
-app.post('/api/add-player', (req, res) => {
+app.post('/api/add-player', async (req, res) => {
     const { playerName, adminToken } = req.body;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
     
@@ -159,12 +169,16 @@ app.post('/api/add-player', (req, res) => {
         return res.status(400).json({ success: false, error: 'Имя не может быть пустым' });
     }
     
-    db.run('INSERT OR IGNORE INTO players (name) VALUES (?)', [playerName.trim()], function(err) {
-        if (err) {
-            return res.status(500).json({ success: false, error: err.message });
-        }
-        res.json({ success: true, playerId: this.lastID });
-    });
+    try {
+        const result = await db.execute({
+            sql: 'INSERT OR IGNORE INTO players (name) VALUES (?)',
+            args: [playerName.trim()]
+        });
+        
+        res.json({ success: true, playerId: result.lastInsertRowid });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 app.get('/g83dsh21tdsg9sa', (req, res) => {
