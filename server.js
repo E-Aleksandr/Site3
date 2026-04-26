@@ -194,9 +194,11 @@ app.post('/api/add-player', async (req, res) => {
 });
 
 app.get('/g83dsh21tdsg9sa/db', (req, res) => {
-    const token = req.query.token;
-    if (token !== ADMIN_TOKEN) {
-        return res.status(403).json({ error: "Forbidden" });
+    const adminToken= req.body;
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
+
+    if (adminToken !== ADMIN_TOKEN) {
+        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
     }
 
     db.all("SELECT * FROM players", [], (err, players) => {
@@ -215,9 +217,11 @@ app.get('/g83dsh21tdsg9sa/db', (req, res) => {
 });
 
 app.post('/g83dsh21tdsg9sa/reset', (req, res) => {
-    const token = req.query.token;
-    if (token !== ADMIN_TOKEN) {
-        return res.status(403).json({ error: "Forbidden" });
+    const adminToken= req.body;
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
+
+    if (adminToken !== ADMIN_TOKEN) {
+        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
     }
 
     db.run("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP", (err) => {
