@@ -214,13 +214,6 @@ ORDER BY destroyed_count DESC, first_destroy_date ASC, MIN(p.created_at) ASC
 });
 
 app.get('/g83dsh21tdsg9sa/reset', async (req, res) => {
-    const { adminToken } = req.body;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
-
-    if (adminToken !== ADMIN_TOKEN) {
-        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
-    }
-
     try {
         await db.execute("DELETE FROM tank_progress");
         await db.execute("DELETE FROM players");
