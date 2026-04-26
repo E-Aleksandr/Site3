@@ -176,8 +176,23 @@ app.post('/api/add-player', async (req, res) => {
             args: [playerName.trim()]
         });
         
-        res.json({ success: true, playerId: result.lastInsertRowid });
+        let playerId = null;
+        if (result.lastInsertRowid !== undefined) {
+            playerId = Number(result.lastInsertRowid);
+        }
+        
+        if (!playerId) {
+            const selectResult = await db.execute({
+                sql: 'SELECT id FROM players WHERE name = ?',
+                args: [playerName.trim()]
+            });
+            playerId = selectResult.rows[0]?.id || null;
+            if (playerId && typeof playerId === 'bigint') playerId = Number(playerId);
+        }
+        
+        res.json({ success: true, playerId });
     } catch (err) {
+        console.error('DB error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
