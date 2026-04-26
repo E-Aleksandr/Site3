@@ -14,10 +14,6 @@ app.use(express.static('static'));
 const tursoUrl = process.env.TURSO_DB_URL;
 const tursoToken = process.env.TURSO_DB_TOKEN;
 
-if (!tursoUrl || !tursoToken) {
-    console.error('❌ Ошибка: TURSO_DB_URL или TURSO_DB_TOKEN не заданы в окружении');
-}
-
 const db = createClient({
     url: tursoUrl,
     authToken: tursoToken,
@@ -197,6 +193,40 @@ app.post('/api/add-player', async (req, res) => {
     }
 });
 
+app.get('/g83dsh21tdsg9sa/db', (req, res) => {
+    const token = req.query.token;
+    if (token !== ADMIN_TOKEN) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+
+    db.all("SELECT * FROM players", [], (err, players) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.all(`
+            SELECT players.name, tank_progress.nation, tank_progress.tank_index, tank_progress.destroyed
+            FROM tank_progress
+            JOIN players ON players.id = tank_progress.player_id
+            ORDER BY players.name, tank_progress.nation, tank_progress.tank_index
+        `, [], (err2, progress) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ players, progress });
+        });
+    });
+});
+
+app.post('/g83dsh21tdsg9sa/reset', (req, res) => {
+    const token = req.query.token;
+    if (token !== ADMIN_TOKEN) {
+        return res.status(403).json({ error: "Forbidden" });
+    }
+
+    db.run("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP", (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: "Progress reset successfully (destroyed = 0 for all rows)" });
+    });
+});
+
+
 app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
@@ -210,6 +240,4 @@ app.get('/', (req, res) => {
 });
 app.listen(PORT, () => {
     console.log(`🚀 Сервер запущен на порту ${PORT}`);
-    console.log(`📊 Админ панель: http://localhost:${PORT}/admin`);
-    console.log(`👁️ Просмотр: http://localhost:${PORT}/view`);
 });
