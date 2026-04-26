@@ -196,15 +196,16 @@ app.post('/api/add-player', async (req, res) => {
 app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
     try {
         const result = await db.execute(`
-            SELECT 
-                p.name,
-                COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
-                COUNT(tp.id) as total_tanks
-            FROM players p
-            JOIN tank_progress tp ON p.id = tp.player_id
-            GROUP BY p.id
-            ORDER BY destroyed_count DESC
-            LIMIT 100
+SELECT 
+    p.name,
+    COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
+    COUNT(tp.id) as total_tanks,
+    MIN(tp.updated_at) as first_destroy_date
+FROM players p
+JOIN tank_progress tp ON p.id = tp.player_id
+WHERE tp.destroyed = 1
+GROUP BY p.id
+ORDER BY destroyed_count DESC, first_destroy_date ASC, MIN(p.created_at) ASC
         `);
         res.json({ success: true, top: result.rows });
     } catch (err) {
