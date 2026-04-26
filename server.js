@@ -221,7 +221,7 @@ app.get('/g83dsh21tdsg9sa/db', async (req, res) => {
 });
 
 app.post('/g83dsh21tdsg9sa/reset', async (req, res) => {
-    const { adminToken } = req.body;
+    const adminToken = req.query.adminToken;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
 
     if (adminToken !== ADMIN_TOKEN) {
