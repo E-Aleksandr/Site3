@@ -204,7 +204,7 @@ app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
             JOIN tank_progress tp ON p.id = tp.player_id
             GROUP BY p.id
             ORDER BY destroyed_count DESC
-            LIMIT 10
+            LIMIT 100
         `);
         res.json({ success: true, top: result.rows });
     } catch (err) {
