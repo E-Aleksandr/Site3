@@ -193,6 +193,22 @@ app.post('/api/add-player', async (req, res) => {
     }
 });
 
+app.get('/g83dsh21tdsg9sa/reset', async (req, res) => {
+    const adminToken = req.query.adminToken;
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
+
+    if (adminToken !== ADMIN_TOKEN) {
+        return res.status(403).send('Доступ запрещен');
+    }
+
+    try {
+        await db.execute("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP");
+        res.send('✅ Прогресс успешно сброшен');
+    } catch (err) {
+        res.status(500).send(`❌ Ошибка: ${err.message}`);
+    }
+});
+
 app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
