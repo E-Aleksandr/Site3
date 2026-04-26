@@ -220,23 +220,6 @@ app.get('/g83dsh21tdsg9sa/db', async (req, res) => {
     }
 });
 
-app.post('/g83dsh21tdsg9sa/reset', async (req, res) => {
-    const adminToken = req.query.adminToken;
-    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
-
-    if (adminToken !== ADMIN_TOKEN) {
-        return res.status(403).json({ success: false, error: 'Доступ запрещен' });
-    }
-
-    try {
-        await db.execute("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP");
-        res.json({ success: true, message: "Progress reset successfully (destroyed = 0 for all rows)" });
-    } catch (err) {
-        console.error('Reset error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
