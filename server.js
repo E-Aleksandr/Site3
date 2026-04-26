@@ -193,6 +193,25 @@ app.post('/api/add-player', async (req, res) => {
     }
 });
 
+app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
+    try {
+        const result = await db.execute(`
+            SELECT 
+                p.name,
+                COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
+                COUNT(tp.id) as total_tanks
+            FROM players p
+            JOIN tank_progress tp ON p.id = tp.player_id
+            GROUP BY p.id
+            ORDER BY destroyed_count DESC
+            LIMIT 10
+        `);
+        res.json({ success: true, top: result.rows });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/g83dsh21tdsg9sa/reset', async (req, res) => {
     const adminToken = req.query.adminToken;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
