@@ -193,43 +193,49 @@ app.post('/api/add-player', async (req, res) => {
     }
 });
 
-app.get('/g83dsh21tdsg9sa/db', (req, res) => {
-    const adminToken= req.body;
+app.get('/g83dsh21tdsg9sa/db', async (req, res) => {
+    const adminToken = req.query.adminToken;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
 
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ success: false, error: 'Доступ запрещен' });
     }
 
-    db.all("SELECT * FROM players", [], (err, players) => {
-        if (err) return res.status(500).json({ error: err.message });
+    try {
+        const playersResult = await db.execute("SELECT * FROM players ORDER BY name");
+        const players = playersResult.rows;
 
-        db.all(`
+        const progressResult = await db.execute(`
             SELECT players.name, tank_progress.nation, tank_progress.tank_index, tank_progress.destroyed
             FROM tank_progress
             JOIN players ON players.id = tank_progress.player_id
             ORDER BY players.name, tank_progress.nation, tank_progress.tank_index
-        `, [], (err2, progress) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ players, progress });
-        });
-    });
+        `);
+        const progress = progressResult.rows;
+
+        res.json({ players, progress });
+    } catch (err) {
+        console.error('DB error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
-app.post('/g83dsh21tdsg9sa/reset', (req, res) => {
-    const adminToken= req.body;
+app.post('/g83dsh21tdsg9sa/reset', async (req, res) => {
+    const { adminToken } = req.body;
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'Automaton123Dysphoria';
 
     if (adminToken !== ADMIN_TOKEN) {
         return res.status(403).json({ success: false, error: 'Доступ запрещен' });
     }
 
-    db.run("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP", (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Progress reset successfully (destroyed = 0 for all rows)" });
-    });
+    try {
+        await db.execute("UPDATE tank_progress SET destroyed = 0, updated_at = CURRENT_TIMESTAMP");
+        res.json({ success: true, message: "Progress reset successfully (destroyed = 0 for all rows)" });
+    } catch (err) {
+        console.error('Reset error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
-
 
 app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
