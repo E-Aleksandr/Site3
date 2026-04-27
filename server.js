@@ -215,20 +215,20 @@ app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
                 p.name,
                 COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
                 COUNT(tp.id) as total_tanks,
-                MIN(tp.first_destroyed_at) as first_destroy_date
+                MAX(tp.first_destroyed_at) as last_achievement_date
             FROM players p
             JOIN tank_progress tp ON p.id = tp.player_id
             WHERE tp.destroyed = 1
             GROUP BY p.id
             ORDER BY 
-                destroyed_count DESC,                    -- Сначала по количеству (больше = выше)
-                first_destroy_date ASC,                  -- При равном количестве: кто раньше достиг последнего танка
-                MIN(p.created_at) ASC                    -- Если совсем одинаково: кто раньше зарегистрировался
+                destroyed_count DESC,
+                last_achievement_date ASC
             LIMIT 10
         `);
         
         res.json({ success: true, top: result.rows });
     } catch (err) {
+        console.error('Top error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
