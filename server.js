@@ -233,17 +233,6 @@ app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
     }
 });
 
-app.get('/g83dsh21tdsg9sa/reset', async (req, res) => {
-    try {
-        await db.execute("DROP TABLE IF EXISTS tank_progress");
-        await db.execute("DROP TABLE IF EXISTS players");
-        await initDatabase();
-        res.json({ success: true, message: "Таблицы пересозданы" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 app.get('/g83dsh21tdsg9sa', (req, res) => {
     res.sendFile(path.join(__dirname, 'static', 'admin.html'));
 });
