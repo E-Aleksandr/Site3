@@ -42,10 +42,12 @@ async function initDatabase() {
             )
         `);
         
-        console.log('✅ Таблицы созданы/проверены');
+        console.log('Таблицы созданы/проверены');
     } catch (err) {
-        console.error('❌ Ошибка инициализации БД:', err.message);
+        console.error('Ошибка инициализации БД:', err.message);
     }
+
+    await db.execute(`ALTER TABLE tank_progress ADD COLUMN first_destroyed_at DATETIME`).catch(() => {});
 }
 
 initDatabase();
@@ -143,10 +145,23 @@ app.post('/api/save', async (req, res) => {
                 INSERT INTO tank_progress (player_id, nation, tank_index, destroyed, updated_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(player_id, nation, tank_index) 
-                DO UPDATE SET destroyed = ?, updated_at = CURRENT_TIMESTAMP
+                DO UPDATE SET 
+                    destroyed = ?, 
+                    updated_at = CURRENT_TIMESTAMP
             `,
             args: [playerId, nation, tankIndex, destroyed ? 1 : 0, destroyed ? 1 : 0]
         });
+        
+        if (destroyed) {
+            await db.execute({
+                sql: `
+                    UPDATE tank_progress 
+                    SET first_destroyed_at = COALESCE(first_destroyed_at, CURRENT_TIMESTAMP)
+                    WHERE player_id = ? AND nation = ? AND tank_index = ?
+                `,
+                args: [playerId, nation, tankIndex]
+            });
+        }
         
         res.json({ success: true });
     } catch (err) {
@@ -196,17 +211,22 @@ app.post('/api/add-player', async (req, res) => {
 app.get('/g83dsh21tdsg9sa/topGet', async (req, res) => {
     try {
         const result = await db.execute(`
-SELECT 
-    p.name,
-    COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
-    COUNT(tp.id) as total_tanks,
-    MIN(tp.updated_at) as first_destroy_date
-FROM players p
-JOIN tank_progress tp ON p.id = tp.player_id
-WHERE tp.destroyed = 1
-GROUP BY p.id
-ORDER BY destroyed_count DESC, first_destroy_date ASC, MIN(p.created_at) ASC
+            SELECT 
+                p.name,
+                COUNT(CASE WHEN tp.destroyed = 1 THEN 1 END) as destroyed_count,
+                COUNT(tp.id) as total_tanks,
+                MIN(tp.first_destroyed_at) as first_destroy_date
+            FROM players p
+            JOIN tank_progress tp ON p.id = tp.player_id
+            WHERE tp.destroyed = 1
+            GROUP BY p.id
+            ORDER BY 
+                destroyed_count DESC,                    -- Сначала по количеству (больше = выше)
+                first_destroy_date ASC,                  -- При равном количестве: кто раньше достиг последнего танка
+                MIN(p.created_at) ASC                    -- Если совсем одинаково: кто раньше зарегистрировался
+            LIMIT 10
         `);
+        
         res.json({ success: true, top: result.rows });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
