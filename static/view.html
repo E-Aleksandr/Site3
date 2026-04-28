@@ -26,6 +26,7 @@
             overflow: visible;
         }
 
+        /* Верхняя панель - прозрачная */
         .player-panel {
             overflow: visible;
             background: rgba(255,255,255,0.08);
@@ -44,6 +45,7 @@
             letter-spacing: 2px;
         }
 
+        /* Кастомный селект */
         .custom-select {
             position: relative;
             width: 100%;
@@ -108,6 +110,7 @@
             font-weight: bold;
         }
 
+        /* Секция добавления */
         .add-player-section {
             border-top: 2px solid #ffd700;
             padding: 15px;
@@ -157,6 +160,7 @@
             transform: scale(1.02);
         }
 
+        /* Мини-прогресс внутри панели */
         .player-mini-stats {
             margin-top: 15px;
             padding: 12px;
@@ -203,6 +207,7 @@
             color: #1a472a;
         }
 
+        /* Сетка танков - прозрачная */
         .nations-grid {
             position: relative;
             z-index: 1;
@@ -1060,38 +1065,46 @@
         let players = {};
         let currentPlayer = null;
         
-        async function loadAllData() {
+        async function loadPlayersFromDB() {
             try {
-                const playersRes = await fetch('/api/players');
-                const playersData = await playersRes.json();
+                const response = await fetch('/api/players');
+                const data = await response.json();
                 
-                if (playersData.success) {
-                    for (let playerName of playersData.players) {
-                        const progressRes = await fetch('/api/progress', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ playerName })
-                        });
-                        const progressData = await progressRes.json();
-                        
-                        players[playerName] = {
-                            totalDestroyed: progressData.totalDestroyed || 0,
-                            totalTanks: getAllTanksCount(),
-                            destroyed: progressData.progress || {}
-                        };
+                if (data.success) {
+                    players = {};
+                    for (let name of data.players) {
+                        await loadPlayerProgressFromDB(name);
                     }
-                    
                     renderPlayersList();
                     
-                    if (Object.keys(players).length > 0) {
-                        currentPlayer = Object.keys(players)[0];
+                    if (data.players.length > 0 && !currentPlayer) {
+                        currentPlayer = data.players[0];
                         applyProgressToUI(currentPlayer);
                         updateMiniStats();
                         document.getElementById('selectedPlayerText').textContent = currentPlayer;
                     }
                 }
             } catch (error) {
-                console.error('Ошибка загрузки:', error);
+                console.error('Ошибка загрузки игроков:', error);
+            }
+        }
+
+        async function loadPlayerProgressFromDB(playerName) {
+            try {
+                const response = await fetch('/api/progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerName })
+                });
+                const data = await response.json();
+                
+                players[playerName] = {
+                    destroyed: data.progress || {},
+                    totalDestroyed: data.totalDestroyed || 0,
+                    totalTanks: getAllTanksFromDOM().length
+                };
+            } catch (error) {
+                console.error('Ошибка загрузки прогресса:', error);
             }
         }
         
@@ -1153,27 +1166,36 @@
         
         function renderPlayersList() {
             const container = document.getElementById('playersList');
-            if (!container) return;
             container.innerHTML = '';
             
-            Object.keys(players).forEach(name => {
+            const playerNames = Object.keys(players);
+            
+            if (playerNames.length === 0) {
+                container.innerHTML = '<div style="padding: 15px; text-align: center; color: #888;">Нет игроков</div>';
+                return;
+            }
+            
+            playerNames.forEach(name => {
                 const player = players[name];
-                const percent = Math.round((player.totalDestroyed / player.totalTanks) * 100);
+                const percent = player.totalTanks > 0 ? Math.round((player.totalDestroyed / player.totalTanks) * 100) : 0;
+                
                 const option = document.createElement('div');
                 option.className = `player-option ${currentPlayer === name ? 'selected' : ''}`;
                 option.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span>${name}</span>
-                        <span>${player.totalDestroyed}/${player.totalTanks} (${percent}%)</span>
+                        <span style="background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 20px; font-size: 12px;">
+                            ${player.totalDestroyed}/${player.totalTanks} (${percent}%)
+                        </span>
                     </div>
                 `;
-                option.onclick = () => {
+                option.onclick = async () => {
                     currentPlayer = name;
                     applyProgressToUI(currentPlayer);
                     renderPlayersList();
                     updateMiniStats();
-                    document.getElementById('selectedPlayerText').textContent = name;
                     document.getElementById('playerDropdown').classList.remove('show');
+                    document.getElementById('selectedPlayerText').textContent = name;
                 };
                 container.appendChild(option);
             });
