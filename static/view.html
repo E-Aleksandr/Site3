@@ -1218,24 +1218,15 @@
         }
         
         async function init() {
-            disableEditing();
-            await loadAllData();
-            
-            const trigger = document.getElementById('selectTrigger');
-            if (trigger) {
-                trigger.onclick = (e) => {
-                    e.stopPropagation();
-                    const dropdown = document.getElementById('playerDropdown');
-                    if (dropdown) dropdown.classList.toggle('show');
-                };
+            await loadPlayersFromDB();
+
+            if (Object.keys(players).length > 0 && !currentPlayer) {
+                currentPlayer = Object.keys(players)[0];
+                applyProgressToUI(currentPlayer);
+                renderPlayersList();
+                updateMiniStats();
+                document.getElementById('selectedPlayerText').textContent = currentPlayer;
             }
-            
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.custom-select')) {
-                    const dropdown = document.getElementById('playerDropdown');
-                    if (dropdown) dropdown.classList.remove('show');
-                }
-            });
         }
         
         init();
