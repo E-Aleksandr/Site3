@@ -26,7 +26,6 @@
             overflow: visible;
         }
 
-        /* Верхняя панель - прозрачная */
         .player-panel {
             overflow: visible;
             background: rgba(255,255,255,0.08);
@@ -45,7 +44,6 @@
             letter-spacing: 2px;
         }
 
-        /* Кастомный селект */
         .custom-select {
             position: relative;
             width: 100%;
@@ -110,7 +108,6 @@
             font-weight: bold;
         }
 
-        /* Секция добавления */
         .add-player-section {
             border-top: 2px solid #ffd700;
             padding: 15px;
@@ -160,7 +157,6 @@
             transform: scale(1.02);
         }
 
-        /* Мини-прогресс внутри панели */
         .player-mini-stats {
             margin-top: 15px;
             padding: 12px;
@@ -207,7 +203,6 @@
             color: #1a472a;
         }
 
-        /* Сетка танков - прозрачная */
         .nations-grid {
             position: relative;
             z-index: 1;
@@ -1064,7 +1059,7 @@
 <script>
         let players = {};
         let currentPlayer = null;
-        
+
         async function loadPlayersFromDB() {
             try {
                 const response = await fetch('/api/players');
@@ -1107,36 +1102,41 @@
                 console.error('Ошибка загрузки прогресса:', error);
             }
         }
+
+        function getAllTanksFromDOM() {
+            const tanks = [];
+            document.querySelectorAll('.nation-card').forEach(nationCard => {
+                const nation = nationCard.dataset.nation;
+                nationCard.querySelectorAll('.tank-item').forEach((tankItem, index) => {
+                    tanks.push({
+                        nation: nation,
+                        element: tankItem,
+                        checkbox: tankItem.querySelector('.tank-checkbox'),
+                        index: index
+                    });
+                });
+            });
+            return tanks;
+        }
         
-        function getAllTanksCount() {
-            let count = 0;
-            document.querySelectorAll('.tank-item').forEach(() => count++);
-            return count;
+        function getTotalTanksCount() {
+            return getAllTanksFromDOM().length;
         }
         
         function applyProgressToUI(playerName) {
             const player = players[playerName];
             if (!player) return;
             
-            for (let nation in player.destroyed) {
-                const tanks = player.destroyed[nation];
-                if (!tanks) continue;
-                
-                tanks.forEach((isDestroyed, index) => {
-                    const checkbox = document.querySelector(
-                        `.tank-item[data-nation="${nation}"][data-index="${index}"] .tank-checkbox`
-                    );
-                    if (checkbox) {
-                        checkbox.checked = isDestroyed;
-                        const tankItem = checkbox.closest('.tank-item');
-                        if (isDestroyed) {
-                            tankItem.classList.add('destroyed');
-                        } else {
-                            tankItem.classList.remove('destroyed');
-                        }
-                    }
-                });
-            }
+            const allTanks = getAllTanksFromDOM();
+            allTanks.forEach(tank => {
+                const isDestroyed = player.destroyed[tank.nation]?.[tank.index] || false;
+                tank.checkbox.checked = isDestroyed;
+                if (isDestroyed) {
+                    tank.element.classList.add('destroyed');
+                } else {
+                    tank.element.classList.remove('destroyed');
+                }
+            });
         }
         
         function disableEditing() {
@@ -1202,22 +1202,37 @@
         }
         
         function updateMiniStats() {
-            if (!currentPlayer || !players[currentPlayer]) return;
+            const miniStats = document.getElementById('playerMiniStats');
             
+            if (!currentPlayer || !players[currentPlayer]) {
+                miniStats.style.display = 'none';
+                return;
+            }
+            
+            miniStats.style.display = 'block';
             const player = players[currentPlayer];
-            const percent = (player.totalDestroyed / player.totalTanks) * 100;
+            const percent = player.totalTanks > 0 ? (player.totalDestroyed / player.totalTanks) * 100 : 0;
+            
             document.getElementById('miniPlayerName').textContent = currentPlayer;
             document.getElementById('miniDestroyedCount').textContent = `${player.totalDestroyed}/${player.totalTanks}`;
             const fillElement = document.getElementById('miniProgressFill');
-            if (fillElement) {
-                fillElement.textContent = `${Math.round(percent)}%`;
-                fillElement.style.width = `${percent}%`;
-            }
-            const statsBlock = document.getElementById('playerMiniStats');
-            if (statsBlock) statsBlock.style.display = 'block';
+            fillElement.textContent = `${Math.round(percent)}%`;
+            fillElement.style.width = `${percent}%`;
         }
+
+        document.getElementById('selectTrigger').onclick = (e) => {
+            e.stopPropagation();
+            document.getElementById('playerDropdown').classList.toggle('show');
+        };
         
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.custom-select')) {
+                document.getElementById('playerDropdown').classList.remove('show');
+            }
+        });
+
         async function init() {
+            disableEditing();
             await loadPlayersFromDB();
 
             if (Object.keys(players).length > 0 && !currentPlayer) {
